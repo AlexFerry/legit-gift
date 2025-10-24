@@ -21,7 +21,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # <-- VERSÃO ATUALIZADA
+          node-version: '20'
       
       - name: Install dependencies
         run: npm install
@@ -29,11 +29,18 @@ jobs:
       - name: Run collector
         env:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
-        run: node collector.js
+        run: npm start
       
-      # Bloco para Auto-commit e Push
-      - name: Auto-commit and Push changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+      - name: Commit changes
+        run: |
+          git config --local user.email "action@github.com"
+          git config --local user.name "GitHub Action"
+          git add codes.json
+          git diff --quiet && git diff --staged --quiet || git commit -m "chore: update giftcodes [skip ci]"
+      
+      - name: Push changes
+        uses: ad-m/github-push-action@master
         with:
-          commit_message: "chore: update giftcodes [skip ci]"
-          file_pattern: codes.json
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ github.ref }}
+
