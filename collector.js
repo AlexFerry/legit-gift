@@ -72,7 +72,7 @@ function extractWorkingCodes(html) {
         .replace(/\.$/, '');
 
 
-      if (cleaned && /^[a-z0-9]{3,20}$/.test(cleaned)) {
+      if (cleaned && /^[a-z0-9.]{3,20}$/.test(cleaned)) {
         codes.add(cleaned);
       }
     });
