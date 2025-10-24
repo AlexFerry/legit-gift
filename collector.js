@@ -16,7 +16,7 @@ const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 // Lista de fontes para coleta de códigos
 const SOURCES = [
-  'https://www.pocketgamer.com/legend-of-mushroom/codes/',
+  'https://www.vg247.com/legend-of-mushroom-codes',
 
 ];
 
