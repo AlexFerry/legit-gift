@@ -16,13 +16,12 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
         with:
-          # Permite que a ação de auto-commit funcione corretamente
           token: ${{ secrets.GITHUB_TOKEN }}
       
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '18'
+          node-version: '20'  # <-- VERSÃO ATUALIZADA
       
       - name: Install dependencies
         run: npm install
@@ -32,10 +31,9 @@ jobs:
           DISCORD_WEBHOOK: ${{ secrets.DISCORD_WEBHOOK }}
         run: node collector.js
       
-      # NOVO BLOCO: Usa a ação de auto-commit mais robusta
+      # Bloco para Auto-commit e Push
       - name: Auto-commit and Push changes
         uses: stefanzweifel/git-auto-commit-action@v5
         with:
           commit_message: "chore: update giftcodes [skip ci]"
           file_pattern: codes.json
-          # O token padrão do GITHUB_TOKEN já é usado por esta ação
