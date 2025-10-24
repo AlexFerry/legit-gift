@@ -1,4 +1,3 @@
-'''
 import axios from 'axios';
 import * as cheerio from 'cheerio';
 import fs from 'fs-extra';
@@ -15,15 +14,15 @@ const __dirname = path.dirname(__filename);
 const CODES_FILE = path.join(__dirname, 'codes.json');
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 
-// Lista de fontes para coleta de códigos
+// Lista de fontes para coleta de códigos (Facebook e Theriagames removidos)
 const SOURCES = [
   'https://lootbar.gg/blog/en/legend-of-mushroom-codes.html',
   'https://www.pockettactics.com/legend-of-mushroom/codes',
-  'https://www.pocketgamer.com/legend-of-mushroom/codes/'
+  'https://www.pocketgamer.com/legend-of-mushroom/codes/',
 ];
 
 /**
- * Verifica se a string é uma palavra comum (para evitar falsos positivos)
+ * Verifica se a string é uma palavra comum (para evitar falsos positivos )
  */
 function isCommonWord(str) {
   const commonWords = [
@@ -61,9 +60,10 @@ function isCommonWord(str) {
 
 /**
  * Verifica se uma string é um código válido
+ * Critérios: 3-20 caracteres, alfanumérico, não pode ser apenas números, e não pode ser palavra comum.
  */
 function isValidCode(str) {
-  // Não deve ser composto apenas por dígitos
+  // Não deve ser composto apenas por dígitos (para evitar anos, números de versão, etc.)
   if (/^\d+$/.test(str)) {
     return false;
   }
@@ -107,6 +107,7 @@ async function fetchPage(url) {
 
 /**
  * Extrai códigos de uma página HTML
+ * Remove textos entre parênteses e hífens antes de aplicar a regex.
  */
 function extractCodesFromHTML(html) {
   const $ = cheerio.load(html);
@@ -122,7 +123,7 @@ function extractCodesFromHTML(html) {
       .split('-')[0]
       .trim();
 
-    // Extrai possíveis códigos do texto limpo
+    // Extrai possíveis códigos do texto limpo (alfanuméricos 3-20 chars)
     const potentialCodes = cleanedText.match(/\b[A-Z0-9]{3,20}\b/g) || [];
 
     potentialCodes.forEach(code => {
@@ -198,6 +199,7 @@ async function main() {
   const existingCodes = await loadCodes();
   console.log(`📦 Códigos já armazenados: ${Object.keys(existingCodes).length}\n`);
 
+  // Usamos um Map para garantir que não haja duplicatas de códigos encontrados em diferentes tags da mesma página
   const allFoundCodes = new Map();
 
   for (const source of SOURCES) {
@@ -229,7 +231,9 @@ async function main() {
         last_seen: now
       };
     } else {
+      // Atualiza o last_seen para códigos já existentes
       existingCodes[code].last_seen = now;
+      // Adiciona a nova fonte se o código foi encontrado em um novo lugar
       if (!existingCodes[code].sources.includes(source)) {
         existingCodes[code].sources.push(source);
       }
@@ -256,4 +260,3 @@ main().catch(error => {
   console.error('❌ Erro fatal durante a execução:', error.message);
   process.exit(1);
 });
-'''
