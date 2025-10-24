@@ -14,15 +14,144 @@ const __dirname = path.dirname(__filename);
 const CODES_FILE = path.join(__dirname, 'codes.json');
 const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 
-// Lista de fontes para coleta de códigos (Facebook e Theriagames removidos)
+// Lista de fontes para coleta de códigos
 const SOURCES = [
   'https://lootbar.gg/blog/en/legend-of-mushroom-codes.html',
   'https://www.pockettactics.com/legend-of-mushroom/codes',
   'https://www.pocketgamer.com/legend-of-mushroom/codes/',
+
 ];
 
+
+
 /**
- * Verifica se a string é uma palavra comum (para evitar falsos positivos )
+ * Faz requisição HTTP para uma URL com timeout e user-agent
+ */
+async function fetchPage(url) {
+  try {
+    const response = await axios.get(url, {
+      timeout: 10000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+      }
+    });
+    return response.data;
+  } catch (error) {
+    console.error(`❌ Erro ao buscar ${url}:`, error.message);
+    return null;
+  }
+}
+
+/**
+ * Limpa o texto removendo espaços em branco extras e caracteres especiais
+ */
+function cleanText(text) {
+  // Remove &nbsp; e outros caracteres especiais HTML
+  return text
+    .replace(/&nbsp;/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/&lt;/g, '<')
+    .replace(/&gt;/g, '>')
+    .trim();
+}
+
+/**
+ * Extrai códigos de um texto bruto
+ * Remove tudo que está entre parênteses e após hífens
+ */
+function extractCodesFromText(text) {
+  const codes = new Set();
+  
+  // Dividir por quebras de linha ou pontos para processar cada possível código
+  const lines = text.split(/[\n,;]/);
+  
+  lines.forEach(line => {
+    line = cleanText(line);
+    
+    if (!line) return;
+    
+    // Remover tudo que está entre parênteses (expires, new!, etc)
+    line = line.replace(/\s*\([^)]*\)/g, '');
+    
+    // Remover tudo que vem após um hífen (descrição de recompensas)
+    line = line.split('-')[0];
+    
+    // Limpar novamente
+    line = cleanText(line);
+    
+    // Validar se é um código válido
+    if (isValidCode(line)) {
+      codes.add(line);
+    }
+  });
+  
+  return Array.from(codes);
+}
+
+/**
+ * Verifica se uma string é um código válido
+ * Deve ser alfanumérico, 3-20 caracteres, e não ser uma palavra comum
+ */
+function isValidCode(str) {
+  // Deve ter entre 3 e 20 caracteres
+  if (str.length < 3 || str.length > 20) {
+    return false;
+  }
+  
+  // Deve ser alfanumérico (letras e números apenas)
+  if (!/^[A-Za-z0-9]+$/.test(str)) {
+    return false;
+  }
+  
+  // Não deve ser uma palavra comum (para evitar falsos positivos)
+  if (isCommonWord(str)) {
+    return false;
+  }
+  
+  return true;
+}
+
+/**
+ * Extrai códigos de uma página HTML
+ * Procura por padrões em <strong>, <li>, <code>, etc.
+ */
+function extractCodesFromHTML(html) {
+  const $ = cheerio.load(html);
+  const codes = new Set();
+  
+  // Estratégia 1: Extrair de tags <strong> dentro de <li> (comum em listas de códigos)
+  $('li strong').each((i, elem) => {
+    const text = $(elem).text();
+    const extracted = extractCodesFromText(text);
+    extracted.forEach(code => codes.add(code));
+  });
+  
+  // Estratégia 2: Extrair de tags <code>
+  $('code').each((i, elem) => {
+    const text = $(elem).text();
+    const extracted = extractCodesFromText(text);
+    extracted.forEach(code => codes.add(code));
+  });
+  
+  // Estratégia 3: Extrair de qualquer <li> que contenha um padrão de código
+  $('li').each((i, elem) => {
+    const text = $(elem).text();
+    const extracted = extractCodesFromText(text);
+    extracted.forEach(code => codes.add(code));
+  });
+  
+  // Estratégia 4: Se nenhum código foi encontrado, tenta extração genérica do texto
+  if (codes.size === 0) {
+    const text = $('body').text();
+    const extracted = extractCodesFromText(text);
+    extracted.forEach(code => codes.add(code));
+  }
+  
+  return Array.from(codes);
+}
+
+/**
+ * Verifica se a string é uma palavra comum (para evitar falsos positivos)
  */
 function isCommonWord(str) {
   const commonWords = [
@@ -45,7 +174,7 @@ function isCommonWord(str) {
     'VERY', 'WANT', 'WHAT', 'WORK', 'YEAR', 'TWITTER', 'FACEBOOK',
     'DISCORD', 'INSTAGRAM', 'YOUTUBE', 'TIKTOK', 'BLUESKY', 'REDDIT',
     'TWITCH', 'STEAM', 'APPLE', 'ANDROID', 'BLOG', 'FAQ', 'NEWS',
-    'CONTACT', 'CAREERS', 'SUPPORT', 'ACCOUNT', 'LOGIN',
+    'ABOUT', 'CONTACT', 'CAREERS', 'SUPPORT', 'ACCOUNT', 'LOGIN',
     'SIGNUP', 'MENU', 'SEARCH', 'OVERVIEW', 'GUIDE', 'TUTORIAL',
     'HELP', 'SETTINGS', 'YES', 'NO', 'OK', 'NULL', 'FALSE', 'TRUE',
     'UNDEFINED', 'NEWSLETTER', 'PRIVACY', 'TERMS', 'SUSTAINABILITY',
@@ -59,91 +188,13 @@ function isCommonWord(str) {
 }
 
 /**
- * Verifica se uma string é um código válido
- * Critérios: 3-20 caracteres, alfanumérico, não pode ser apenas números, e não pode ser palavra comum.
- */
-function isValidCode(str) {
-  // Não deve ser composto apenas por dígitos (para evitar anos, números de versão, etc.)
-  if (/^\d+$/.test(str)) {
-    return false;
-  }
-  
-  // Deve ter entre 3 e 20 caracteres
-  if (str.length < 3 || str.length > 20) {
-    return false;
-  }
-  
-  // Deve ser alfanumérico
-  if (!/^[A-Za-z0-9]+$/.test(str)) {
-    return false;
-  }
-  
-  // Não deve ser uma palavra comum
-  if (isCommonWord(str)) {
-    return false;
-  }
-  
-  return true;
-}
-
-
-/**
- * Faz requisição HTTP para uma URL com timeout e user-agent
- */
-async function fetchPage(url) {
-  try {
-    const response = await axios.get(url, {
-      timeout: 15000,
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-      }
-    });
-    return response.data;
-  } catch (error) {
-    console.error(`❌ Erro ao buscar ${url}:`, error.message);
-    return null;
-  }
-}
-
-/**
- * Extrai códigos de uma página HTML
- * Remove textos entre parênteses e hífens antes de aplicar a regex.
- */
-function extractCodesFromHTML(html) {
-  const $ = cheerio.load(html);
-  const codes = new Set();
-
-  // Estratégia: Iterar sobre elementos que comumente contêm códigos
-  $('li, strong, code, div, p').each((i, elem) => {
-    const text = $(elem).text();
-    
-    // Remove textos entre parênteses e após hífens
-    const cleanedText = text
-      .replace(/\s*\([^)]*\)/g, '')
-      .split('-')[0]
-      .trim();
-
-    // Extrai possíveis códigos do texto limpo (alfanuméricos 3-20 chars)
-    const potentialCodes = cleanedText.match(/\b[A-Z0-9]{3,20}\b/g) || [];
-
-    potentialCodes.forEach(code => {
-      if (isValidCode(code)) {
-        codes.add(code);
-      }
-    });
-  });
-
-  return Array.from(codes);
-}
-
-/**
  * Carrega códigos existentes do arquivo JSON
  */
 async function loadCodes() {
   try {
     if (await fs.pathExists(CODES_FILE)) {
       const data = await fs.readFile(CODES_FILE, 'utf8');
-      return JSON.parse(data) || {};
+      return JSON.parse(data);
     }
   } catch (error) {
     console.error('❌ Erro ao carregar codes.json:', error.message);
@@ -161,6 +212,78 @@ async function saveCodes(codes) {
   } catch (error) {
     console.error('❌ Erro ao salvar codes.json:', error.message);
   }
+}
+
+/**
+ * Coleta códigos de todas as fontes
+ */
+async function collectCodes() {
+  console.log('🔄 Iniciando coleta de códigos...\n');
+  
+  const allCodes = {};
+  
+  for (const source of SOURCES) {
+    console.log(`📍 Processando: ${source}`);
+    
+    const html = await fetchPage(source);
+    if (!html) continue;
+    
+    const codes = extractCodesFromHTML(html);
+    
+    if (codes.length > 0) {
+      console.log(`   Encontrados ${codes.length} códigos potenciais`);
+    } else {
+      console.log(`   Nenhum código encontrado`);
+    }
+    
+    codes.forEach(code => {
+      allCodes[code] = source;
+    });
+  }
+  
+  return allCodes;
+}
+
+/**
+ * Compara códigos encontrados com os já armazenados
+ */
+function findNewCodes(foundCodes, existingCodes) {
+  const newCodes = [];
+  
+  Object.keys(foundCodes).forEach(code => {
+    if (!existingCodes[code]) {
+      newCodes.push(code);
+    } else {
+      // Atualizar last_seen se o código já existe
+      existingCodes[code].last_seen = new Date().toISOString();
+      
+      // Adicionar fonte se não estiver na lista
+      const source = foundCodes[code];
+      if (!existingCodes[code].sources.includes(source)) {
+        existingCodes[code].sources.push(source);
+      }
+    }
+  });
+  
+  return newCodes;
+}
+
+/**
+ * Adiciona novos códigos ao objeto de códigos
+ */
+function addNewCodes(newCodes, foundCodes, existingCodes) {
+  const now = new Date().toISOString();
+  
+  newCodes.forEach(code => {
+    existingCodes[code] = {
+      code: code,
+      sources: [foundCodes[code]],
+      first_seen: now,
+      last_seen: now
+    };
+  });
+  
+  return existingCodes;
 }
 
 /**
@@ -194,69 +317,41 @@ async function notifyDiscord(newCodes) {
  * Função principal
  */
 async function main() {
-  console.log('🔄 Iniciando coleta de códigos...\n');
-
-  const existingCodes = await loadCodes();
-  console.log(`📦 Códigos já armazenados: ${Object.keys(existingCodes).length}\n`);
-
-  // Usamos um Map para garantir que não haja duplicatas de códigos encontrados em diferentes tags da mesma página
-  const allFoundCodes = new Map();
-
-  for (const source of SOURCES) {
-    console.log(`📍 Processando: ${source}`);
+  try {
+    // Carregar códigos existentes
+    const existingCodes = await loadCodes();
+    console.log(`📦 Códigos já armazenados: ${Object.keys(existingCodes).length}\n`);
     
-    const html = await fetchPage(source);
-    if (!html) continue;
+    // Coletar novos códigos
+    const foundCodes = await collectCodes();
+    console.log(`\n🔍 Total de códigos encontrados nesta execução: ${Object.keys(foundCodes).length}\n`);
     
-    const codes = extractCodesFromHTML(html);
-    console.log(`   Encontrados ${codes.length} códigos válidos`);
-
-    codes.forEach(code => {
-      if (!allFoundCodes.has(code)) {
-        allFoundCodes.set(code, source);
-      }
-    });
-  }
-
-  const newCodes = [];
-  const now = new Date().toISOString();
-
-  for (const [code, source] of allFoundCodes) {
-    if (!existingCodes[code]) {
-      newCodes.push(code);
-      existingCodes[code] = {
-        code: code,
-        sources: [source],
-        first_seen: now,
-        last_seen: now
-      };
+    // Encontrar novos códigos
+    const newCodes = findNewCodes(foundCodes, existingCodes);
+    console.log(`✨ Códigos novos: ${newCodes.length}`);
+    
+    if (newCodes.length > 0) {
+      console.log(`   Novos: ${newCodes.join(', ')}\n`);
+      
+      // Adicionar novos códigos
+      const updatedCodes = addNewCodes(newCodes, foundCodes, existingCodes);
+      
+      // Salvar
+      await saveCodes(updatedCodes);
+      
+      // Notificar Discord
+      await notifyDiscord(newCodes);
     } else {
-      // Atualiza o last_seen para códigos já existentes
-      existingCodes[code].last_seen = now;
-      // Adiciona a nova fonte se o código foi encontrado em um novo lugar
-      if (!existingCodes[code].sources.includes(source)) {
-        existingCodes[code].sources.push(source);
-      }
+      console.log('   Nenhum código novo encontrado\n');
     }
+    
+    console.log('✅ Coleta concluída com sucesso!');
+  } catch (error) {
+    console.error('❌ Erro durante a execução:', error.message);
+    process.exit(1);
   }
-  
-  console.log(`\n✨ Total de códigos novos encontrados: ${newCodes.length}`);
-
-  if (newCodes.length > 0) {
-    console.log(`   Novos: ${newCodes.join(', ')}\n`);
-  }
-
-  // Salva o arquivo de códigos (mesmo que não haja novos, para atualizar o last_seen)
-  await saveCodes(existingCodes);
-  
-  // Notifica apenas se houver códigos novos
-  await notifyDiscord(newCodes);
-
-  console.log('\n✅ Coleta concluída com sucesso!');
 }
 
 // Executar
-main().catch(error => {
-  console.error('❌ Erro fatal durante a execução:', error.message);
-  process.exit(1);
-});
+main();
+
