@@ -65,9 +65,12 @@ function extractWorkingCodes(html) {
     // Buscar os possíveis códigos
     current.find('strong, li, p, code').each((i, elem) => {
       const raw = $(elem).text().trim();
-      const cleaned = raw.split(':')[0] // se tiver "Elements: reward..."
-        .replace(/[^a-zA-Z0-9]/g, '')   // remover símbolos extras
-        .toLowerCase();
+      const cleaned = raw.split(':')[0]
+        .toLowerCase()
+        .replace(/[^a-z0-9.]/g, '')
+        .replace(/^\./, '')
+        .replace(/\.$/, '');
+
 
       if (cleaned && /^[a-z0-9]{3,20}$/.test(cleaned)) {
         codes.add(cleaned);
