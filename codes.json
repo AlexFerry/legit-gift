@@ -1,27 +1,11 @@
 {
-  "elements": {
-    "code": "elements",
-    "sources": [
-      "https://www.vg247.com/legend-of-mushroom-codes"
-    ],
-    "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
-  },
-  "moonlight": {
-    "code": "moonlight",
-    "sources": [
-      "https://www.vg247.com/legend-of-mushroom-codes"
-    ],
-    "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
-  },
   "1.5anniv": {
     "code": "1.5anniv",
     "sources": [
       "https://www.vg247.com/legend-of-mushroom-codes"
     ],
     "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
+    "last_seen": "2025-10-30T18:12:47.882Z"
   },
   "mechstorm": {
     "code": "mechstorm",
@@ -29,7 +13,7 @@
       "https://www.vg247.com/legend-of-mushroom-codes"
     ],
     "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
+    "last_seen": "2025-10-30T18:12:47.882Z"
   },
   "welcome": {
     "code": "welcome",
@@ -37,7 +21,7 @@
       "https://www.vg247.com/legend-of-mushroom-codes"
     ],
     "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
+    "last_seen": "2025-10-30T18:12:47.882Z"
   },
   "nice": {
     "code": "nice",
@@ -45,7 +29,7 @@
       "https://www.vg247.com/legend-of-mushroom-codes"
     ],
     "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
+    "last_seen": "2025-10-30T18:12:47.882Z"
   },
   "lom2025": {
     "code": "lom2025",
@@ -53,6 +37,14 @@
       "https://www.vg247.com/legend-of-mushroom-codes"
     ],
     "first_seen": "2025-10-24T19:44:40.797Z",
-    "last_seen": "2025-10-30T12:16:29.469Z"
+    "last_seen": "2025-10-30T18:12:47.882Z"
+  },
+  "marigold": {
+    "code": "marigold",
+    "sources": [
+      "https://www.vg247.com/legend-of-mushroom-codes"
+    ],
+    "first_seen": "2025-10-30T18:12:47.882Z",
+    "last_seen": "2025-10-30T18:12:47.882Z"
   }
 }
