@@ -278,7 +278,9 @@ async function main() {
           last_seen: now
         });
       } else {
-        aggregated.get(cleaned).sources.add('manual');
+        // User requested to "delete the code that came from the collector" if duplicated.
+        // So we overwrite the sources to be ONLY 'manual'.
+        aggregated.get(cleaned).sources = new Set(['manual']);
         aggregated.get(cleaned).last_seen = now;
       }
     }
