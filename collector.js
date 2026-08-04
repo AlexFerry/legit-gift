@@ -18,7 +18,7 @@ const DISCORD_WEBHOOK = process.env.DISCORD_WEBHOOK;
 
 // Source única
 const SOURCES = [
-  'https://www.vg247.com/legend-of-mushroom-codes'
+  'https://www.destructoid.com/legend-of-mushroom-codes/'
 ];
 
 /**
@@ -40,74 +40,32 @@ async function fetchPage(url) {
 }
 
 /**
- * Extrai apenas os códigos da seção "Working Legend of Mushroom codes"
+ * Extrai os códigos da lista <ul class="wp-block-list"><li><strong>CODE</strong>—Redeem...</li></ul>
+ * Preserva o case original do código (ex: "DealSealed").
  */
 function extractWorkingCodes(html, url = '') {
   const $ = cheerio.load(html);
   const codes = new Set();
 
-  const workingHeader = $('h2, h3')
-    .filter((i, el) => $(el).text().toLowerCase().includes('working legend of mushroom codes'))
-    .first();
+  $('ul.wp-block-list li').each((i, el) => {
+    // pega o texto do primeiro <strong> (funciona mesmo com <strong><strong>CODE</strong></strong>)
+    const strongText = $(el).find('strong').first().text().trim();
+    if (!strongText) return;
 
-  if (!workingHeader.length) {
-    // fallback: try headers contendo "working" and "codes"
-    const altHeader = $('h2, h3')
-      .filter((i, el) => {
-        const t = $(el).text().toLowerCase();
-        return t.includes('working') && t.includes('codes');
-      })
-      .first();
-    if (!altHeader.length) {
-      console.warn('⚠️ Working header not found in HTML');
-      return [];
+    // remove qualquer caractere que não seja letra ou número, preservando o case original
+    const cleaned = strongText.replace(/[^a-zA-Z0-9]/g, '');
+
+    if (cleaned && cleaned.length >= 3 && cleaned.length <= 20) {
+      codes.add(cleaned);
     }
-  }
+  });
 
-  const header = workingHeader.length ? workingHeader : $('h2, h3')
-    .filter((i, el) => {
-      const t = $(el).text().toLowerCase();
-      return t.includes('working') && t.includes('codes');
-    })
-    .first();
-
-  let current = header.next();
-  while (current.length) {
-    const text = current.text().toLowerCase().trim();
-    if (text.includes('expired legend of mushroom codes') || text.includes('expired')) break;
-
-    current.find('strong, li, p, code').each((i, elem) => {
-      const raw = $(elem).text().trim();
-      const cleaned = raw.split(':')[0]
-        .toLowerCase()
-        .replace(/[^a-z0-9.]/g, '')
-        .replace(/^\./, '')
-        .replace(/\.$/, '');
-
-      if (cleaned && /^[a-z0-9.]{3,20}$/.test(cleaned)) {
-        codes.add(cleaned);
-      }
-    });
-
-    // também validar tokens diretos (fallback)
-    const direct = current.text().split(/\s+/).map(s => s.trim()).filter(Boolean);
-    direct.forEach(token => {
-      const cleaned = token.split(':')[0]
-        .toLowerCase()
-        .replace(/[^a-z0-9.]/g, '')
-        .replace(/^\./, '')
-        .replace(/\.$/, '');
-      if (cleaned && /^[a-z0-9.]{3,20}$/.test(cleaned)) {
-        codes.add(cleaned);
-      }
-    });
-
-    current = current.next();
+  if (codes.size === 0) {
+    console.warn('⚠️ Nenhum código encontrado em ul.wp-block-list');
   }
 
   return Array.from(codes);
 }
-
 
 /**
  * Utility to load JSON safe
@@ -157,7 +115,7 @@ async function handleCli() {
 
   const cmd = argv[0];
   if (cmd === '--add' && argv[1]) {
-    const code = argv[1].toLowerCase().replace(/[^a-z0-9.]/g, '');
+    const code = argv[1].replace(/[^a-zA-Z0-9]/g, '');
     const manual = await loadJsonSafe(MANUAL_FILE, []);
     if (!manual.includes(code)) {
       manual.push(code);
@@ -170,7 +128,7 @@ async function handleCli() {
   }
 
   if (cmd === '--block' && argv[1]) {
-    const code = argv[1].toLowerCase().replace(/[^a-z0-9.]/g, '');
+    const code = argv[1].replace(/[^a-zA-Z0-9]/g, '');
     const blocked = await loadJsonSafe(BLOCKED_FILE, []);
     if (!blocked.includes(code)) {
       blocked.push(code);
@@ -183,7 +141,7 @@ async function handleCli() {
   }
 
   if (cmd === '--unblock' && argv[1]) {
-    const code = argv[1].toLowerCase().replace(/[^a-z0-9.]/g, '');
+    const code = argv[1].replace(/[^a-zA-Z0-9]/g, '');
     let blocked = await loadJsonSafe(BLOCKED_FILE, []);
     blocked = blocked.filter(c => c !== code);
     await saveJsonSafe(BLOCKED_FILE, blocked);
@@ -217,20 +175,14 @@ async function main() {
 
   console.log('🔄 Collecting active codes from all configured sources...');
 
-  const aggregated = new Map(); // code -> { code, sources: Set(), first_seen, last_seen }
+  const aggregated = new Set();
 
-  // load existing codes
+  // load existing codes (formato: { "CODE": { "code": "CODE" } })
   const existingCodesRaw = await loadJsonSafe(CODES_FILE, {});
-  const now = new Date().toISOString();
 
-  // seed aggregated from existing codes (so we preserve first_seen)
-  for (const [code, meta] of Object.entries(existingCodesRaw)) {
-    aggregated.set(code, {
-      code,
-      sources: new Set(meta.sources || []),
-      first_seen: meta.first_seen || now,
-      last_seen: meta.last_seen || now
-    });
+  // seed aggregated from existing codes
+  for (const code of Object.keys(existingCodesRaw)) {
+    aggregated.add(code);
   }
 
   // Scrape each source sequentially (could be parallelized if desired)
@@ -245,44 +197,20 @@ async function main() {
     console.log(`  → Found ${codesFromPage.length} codes on ${src}`);
 
     for (const code of codesFromPage) {
-      if (!aggregated.has(code)) {
-        aggregated.set(code, {
-          code,
-          sources: new Set([src]),
-          first_seen: now,
-          last_seen: now
-        });
-      } else {
-        const entry = aggregated.get(code);
-        entry.sources.add(src);
-        entry.last_seen = now;
-      }
+      aggregated.add(code);
     }
   }
 
-  // Load manual additions and add them (source = manual)
+  // Load manual additions and add them
   const manual = await loadJsonSafe(MANUAL_FILE, []);
-  const manualSet = new Set(); // Keep track of manual codes to prevent blocking
+  const manualSet = new Set();
 
   if (manual.length > 0) {
     console.log(`📝 Applying ${manual.length} manual additions`);
     for (const code of manual) {
-      const cleaned = code.toLowerCase().replace(/[^a-z0-9.]/g, '');
+      const cleaned = code.replace(/[^a-zA-Z0-9]/g, '');
       manualSet.add(cleaned);
-
-      if (!aggregated.has(cleaned)) {
-        aggregated.set(cleaned, {
-          code: cleaned,
-          sources: new Set(['manual']),
-          first_seen: now,
-          last_seen: now
-        });
-      } else {
-        // User requested to "delete the code that came from the collector" if duplicated.
-        // So we overwrite the sources to be ONLY 'manual'.
-        aggregated.get(cleaned).sources = new Set(['manual']);
-        aggregated.get(cleaned).last_seen = now;
-      }
+      aggregated.add(cleaned);
     }
   }
 
@@ -291,53 +219,22 @@ async function main() {
   if (blocked.length > 0) {
     console.log(`⛔ Enforcing ${blocked.length} blocked codes`);
     for (const b of blocked) {
-      const cleaned = b.toLowerCase().replace(/[^a-z0-9.]/g, '');
+      const cleaned = b.replace(/[^a-zA-Z0-9]/g, '');
 
       // Skip blocking if the code is in the manual list
-      if (manualSet.has(cleaned)) {
-        continue;
-      }
+      if (manualSet.has(cleaned)) continue;
 
-      if (aggregated.has(cleaned)) {
-        aggregated.delete(cleaned);
-      }
-      // also remove from existingCodesRaw so save doesn't reintroduce them
-      if (existingCodesRaw[cleaned]) {
-        delete existingCodesRaw[cleaned];
-      }
+      aggregated.delete(cleaned);
     }
   }
 
-  // Compare with existingCodesRaw to figure out new ones and removed ones
-  const aggregatedCodes = Array.from(aggregated.keys());
+  // Determine new vs removed codes vs existing
   const existingCodesKeys = Object.keys(existingCodesRaw);
-
-  // removed = existing - aggregated
   const removed = existingCodesKeys.filter(c => !aggregated.has(c));
-  removed.forEach(c => delete existingCodesRaw[c]);
+  const newCodes = Array.from(aggregated).filter(c => !existingCodesRaw[c]);
 
   if (removed.length > 0) {
     console.log(`🗑️ Removed ${removed.length} expired/absent codes: ${removed.join(', ')}`);
-  }
-
-  // Determine newly discovered codes (not present in existingCodesRaw)
-  const newCodes = [];
-  for (const [code, meta] of aggregated.entries()) {
-    if (!existingCodesRaw[code]) {
-      // convert sources set to array unique
-      existingCodesRaw[code] = {
-        code,
-        sources: Array.from(meta.sources),
-        first_seen: meta.first_seen,
-        last_seen: meta.last_seen
-      };
-      newCodes.push(code);
-    } else {
-      // update last_seen and sources (merge unique)
-      existingCodesRaw[code].last_seen = meta.last_seen || now;
-      const mergedSources = new Set([...(existingCodesRaw[code].sources || []), ...meta.sources]);
-      existingCodesRaw[code].sources = Array.from(mergedSources);
-    }
   }
 
   if (newCodes.length > 0) {
@@ -347,8 +244,14 @@ async function main() {
     console.log('ℹ️ No new codes found this run.');
   }
 
+  // Monta o objeto final no formato simplificado: { "CODE": { "code": "CODE" } }
+  const finalCodes = {};
+  for (const code of aggregated) {
+    finalCodes[code] = { code };
+  }
+
   // Finally persist
-  await saveJsonSafe(CODES_FILE, existingCodesRaw);
+  await saveJsonSafe(CODES_FILE, finalCodes);
   console.log('✅ codes.json updated');
   console.log('✅ Done.');
 }
