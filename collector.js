@@ -40,16 +40,54 @@ async function fetchPage(url) {
 }
 
 /**
- * Extrai os códigos da lista <ul class="wp-block-list"><li><strong>CODE</strong>—Redeem...</li></ul>
+ * Encontra o <ul class="wp-block-list"> que vem logo após um heading (h2/h3/h4)
+ * cujo texto bate com headingRegex, parando se encontrar outro heading antes.
+ * Isso evita pegar uls soltas de outros widgets/blocos da página (ex: CSS/JS de forms).
+ */
+function findListAfterHeading($, headingRegex) {
+  const heading = $('h2, h3, h4')
+    .filter((i, el) => headingRegex.test($(el).text()))
+    .first();
+
+  if (!heading.length) return null;
+
+  let el = heading.next();
+  while (el.length) {
+    const tag = (el.prop('tagName') || '').toLowerCase();
+    if (/^h[2-4]$/.test(tag)) break; // chegou no próximo heading, para
+
+    if (el.is('ul.wp-block-list')) return el;
+
+    // às vezes a ul vem dentro de um wrapper (div, section, etc.)
+    const nestedUl = el.find('ul.wp-block-list').first();
+    if (nestedUl.length) return nestedUl;
+
+    el = el.next();
+  }
+  return null;
+}
+
+/**
+ * Extrai apenas os códigos ativos, localizando o heading "Active/Working codes"
+ * e lendo somente a <ul class="wp-block-list"> que vem logo depois dele.
  * Preserva o case original do código (ex: "DealSealed").
  */
 function extractWorkingCodes(html, url = '') {
   const $ = cheerio.load(html);
   const codes = new Set();
 
-  $('ul.wp-block-list li').each((i, el) => {
-    // pega o texto do primeiro <strong> (funciona mesmo com <strong><strong>CODE</strong></strong>)
-    const strongText = $(el).find('strong').first().text().trim();
+  const activeHeadingRegex = /(active|working|current|new).*codes/i;
+  const list = findListAfterHeading($, activeHeadingRegex);
+
+  if (!list) {
+    console.warn('⚠️ Lista de códigos ativos não encontrada (heading não localizado)');
+    return [];
+  }
+
+  list.find('li').each((i, li) => {
+    // pega apenas o PRIMEIRO <strong> do item — o(s) seguinte(s), tipo "(New)",
+    // são labels e não fazem parte do código
+    const strongText = $(li).find('strong').first().text().trim();
     if (!strongText) return;
 
     // remove qualquer caractere que não seja letra ou número, preservando o case original
@@ -61,7 +99,7 @@ function extractWorkingCodes(html, url = '') {
   });
 
   if (codes.size === 0) {
-    console.warn('⚠️ Nenhum código encontrado em ul.wp-block-list');
+    console.warn('⚠️ Nenhum código encontrado na lista ativa');
   }
 
   return Array.from(codes);
